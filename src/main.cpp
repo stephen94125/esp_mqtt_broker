@@ -51,7 +51,8 @@ protected:
         // Cache management: find existing topic, empty slot, or oldest slot
         int slot = -1;
         int oldest_slot = 0;
-        uint32_t oldest_time = 0xFFFFFFFF;
+        uint32_t max_age = 0;
+        uint32_t now = millis();
 
         for (int i = 0; i < MAX_TOPIC_CACHE; i++) {
             if (topic_cache[i].active && strcmp(topic_cache[i].topic, topic) == 0) {
@@ -61,10 +62,14 @@ protected:
             if (!topic_cache[i].active && slot == -1) {
                 slot = i; // First empty slot found
             }
-            // More robust oldest check
-            if (topic_cache[i].active && topic_cache[i].last_updated < oldest_time) {
-                oldest_time = topic_cache[i].last_updated;
-                oldest_slot = i;
+            
+            // Check oldest slot using age (now - last_updated) which is rollover-safe
+            if (topic_cache[i].active) {
+                uint32_t age = now - topic_cache[i].last_updated;
+                if (age > max_age) {
+                    max_age = age;
+                    oldest_slot = i;
+                }
             }
         }
 
@@ -124,11 +129,10 @@ const char* html_head = R"rawliteral(
             border-radius: 12px;
             padding: 1rem;
             border: 1px solid rgba(0, 217, 255, 0.1);
-            overflow-x: auto;
         }
-        .status-table table { width: 100%; border-collapse: collapse; }
+        .status-table table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .status-table th { color: #888; text-align: left; padding: 0.75rem 0.5rem; font-size: 0.9rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
-        .status-table td { padding: 0.75rem 0.5rem; font-size: 0.95rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+        .status-table td { padding: 0.75rem 0.5rem; font-size: 0.95rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); word-wrap: break-word; }
         .status-table tr:last-child td { border-bottom: none; }
         
         .sys-table td:first-child { color: #888; text-align: right; padding-right: 1rem; width: 45%; font-size: 0.9rem; }
@@ -136,8 +140,16 @@ const char* html_head = R"rawliteral(
         
         .topic-cell { display: inline-block; background: rgba(0,217,255,0.1); color: #00d9ff; padding: 0.1rem 0.4rem; border-radius: 4px; font-family: monospace; font-size: 0.85rem;}
         
+        .payload-col { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .topic-col { width: 40%; }
+        .payload-col-header { width: 45%; }
+        .time-col { width: 15%; text-align: center; }
+        
         @media (max-width: 900px) {
             .layout-grid { grid-template-columns: 1fr; }
+            .topic-col { width: 35%; }
+            .payload-col-header { width: 45%; }
+            .time-col { width: 20%; }
         }
         @media (max-width: 600px) {
             body { padding: 0; }
@@ -174,7 +186,7 @@ const char* html_stats = R"rawliteral(
                 <h2>Latest MQTT Items</h2>
                 <div class="status-table">
                     <table>
-                        <tr><th>Topic</th><th>Payload</th><th>Last Updated</th></tr>
+                        <tr><th class="topic-col">Topic</th><th class="payload-col-header">Payload</th><th class="time-col">Last Updated</th></tr>
 )rawliteral";
 
 const char* html_tail = R"rawliteral(
@@ -210,9 +222,10 @@ void handleRoot() {
             has_topics = true;
             uint32_t diff_sec = (now - mqtt.topic_cache[i].last_updated) / 1000;
             snprintf(buf, sizeof(buf), 
-                     "<tr><td><span class=\"topic-cell\">%s</span></td><td>%s</td><td>%lu sec ago</td></tr>", 
+                     "<tr><td class=\"topic-col\"><span class=\"topic-cell\">%s</span></td><td class=\"payload-col\" title=\"%s\">%s</td><td class=\"time-col\">%lu s ago</td></tr>", 
                      mqtt.topic_cache[i].topic, 
-                     mqtt.topic_cache[i].payload, 
+                     mqtt.topic_cache[i].payload, // Tooltip
+                     mqtt.topic_cache[i].payload, // Display
                      diff_sec);
             server.sendContent(buf);
         }
@@ -250,4 +263,15 @@ void setup() {
 void loop() {
     mqtt.loop();
     server.handleClient();
+
+    // WiFi Auto Reconnection Check (every 10 seconds)
+    static uint32_t last_wifi_check = 0;
+    if (millis() - last_wifi_check >= 10000) {
+        last_wifi_check = millis();
+        if (WiFi.status() != WL_CONNECTED) {
+            Serial.println("[WiFi] Disconnected! Reconnecting...");
+            WiFi.disconnect();
+            WiFi.reconnect();
+        }
+    }
 }
