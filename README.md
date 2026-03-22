@@ -1,6 +1,6 @@
 # ESP32 MQTT Broker & Dashboard
 
-![Dashboard Screenshot](https://raw.githubusercontent.com/stephen94125/esp32_mqtt_broker/main/dashboard.png)
+![Dashboard Screenshot](https://raw.githubusercontent.com/stephen94125/esp_mqtt_broker/main/dashboard.png)
 
 A lightweight and robust MQTT broker running directly on an ESP32. It features a modern, responsive "Glassmorphism" web dashboard to monitor system status and the latest MQTT topics in real-time.
 
