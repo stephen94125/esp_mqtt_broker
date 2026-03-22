@@ -162,7 +162,7 @@ const char* html_head = R"rawliteral(
 </head>
 <body>
     <div id="container">
-        <h1>🚐 T5 Cyber Broker</h1>
+        <h1>MQTT Broker</h1>
         <div class="layout-grid">
             <div class="left-col">
                 <h2>System Status</h2>
